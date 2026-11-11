@@ -56,6 +56,20 @@ describe("askCopper failures", () => {
     },
   );
 
+  it("says plainly when Google's free daily limit is used up", async () => {
+    model = new MockLanguageModelV4({
+      doStream: async () => {
+        throw new Error(
+          "You exceeded your current quota. Quota exceeded for metric: generate_content_free_tier_requests, limit: 20",
+        );
+      },
+    });
+    const result = await failingAsk(true);
+    expect(result.status).toBe("error");
+    expect(result.reply).toMatch(/free question limit.*tomorrow/i);
+    expect(errors.join("\n")).toContain("quota");
+  });
+
   it("never logs the API key", async () => {
     await failingAsk(true);
     expect(errors.join("\n")).not.toContain("AIza-test-key");

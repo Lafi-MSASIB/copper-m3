@@ -26,16 +26,25 @@ const MAX_STEPS = 5;
 const SORRY = "Sorry, something went wrong on my end. Please try again.";
 
 /**
- * Google's free models sometimes turn a request away for a few seconds ("model
- * overloaded", "too many requests"). The AI library already retries twice; a
- * couple more tries means a busy moment doesn't reach the shopper as an error.
+ * Google's free tier only allows a few questions a day. When that runs out no
+ * retry helps, so say so plainly instead of "something went wrong".
  */
-const MAX_RETRIES = 4;
+const OUT_OF_QUESTIONS =
+  "Copper has used up today's free question limit from Google. Please try again tomorrow.";
 
-/** The shopper only sees SORRY; this puts the real reason in the server log. */
+/** The shopper only sees a short message; this puts the real reason in the server log. */
 function logFailure(error: unknown) {
-  const reason = error instanceof Error ? error.message : String(error);
+  const reason = errorMessage(error);
   console.error(`[ask-copper] ${reason}`);
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** True when Google refused because the free daily quota is used up. */
+function isQuotaError(error: unknown) {
+  return /quota|rate.?limit|RESOURCE_EXHAUSTED/i.test(errorMessage(error));
 }
 
 export async function askCopper({
@@ -62,7 +71,6 @@ export async function askCopper({
     {
       messages,
       providerOptions: THOUGHT_SUMMARIES,
-      maxRetries: MAX_RETRIES,
       ...(useTools && {
         instructions: COPPER_INSTRUCTIONS,
         tools: copperTools,
@@ -133,7 +141,9 @@ export async function askCopper({
     } catch (error) {
       logFailure(error);
       progress.status = "error";
-      if (!progress.reply.trim()) progress.reply = SORRY;
+      if (!progress.reply.trim()) {
+        progress.reply = isQuotaError(error) ? OUT_OF_QUESTIONS : SORRY;
+      }
     }
     done(snapshot());
   })();
