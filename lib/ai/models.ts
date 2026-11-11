@@ -22,6 +22,19 @@ export type ModelId = (typeof MODELS)[number]["id"];
  */
 export const DEFAULT_MODEL: ModelId = "google/gemini-2.5-flash";
 
+/**
+ * The embedding model: it turns a piece of text into a list of numbers, so
+ * texts with a similar meaning end up with similar numbers. It isn't a chat
+ * model, so it lives apart from MODELS.
+ */
+export const EMBEDDING_MODEL = {
+  id: "google/gemini-embedding-001",
+  googleId: "gemini-embedding-001",
+} as const;
+
+/** 768 numbers per text (not the full 3072) keeps the index file small. */
+export const EMBEDDING_DIMENSIONS = 768;
+
 /** AI_MODEL if it names an approved model, otherwise the default. */
 export function defaultModel(): ModelId {
   const id = process.env.AI_MODEL;

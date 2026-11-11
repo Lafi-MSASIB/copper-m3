@@ -35,6 +35,7 @@ import {
 } from "@/lib/copper/assistant/progress";
 import { formatUsd, getPlans, getProducts } from "@/lib/copper/catalog";
 import { cn } from "@/lib/utils";
+import { CitedText } from "./cited-text";
 
 const STARTERS = [
   "How much is Copper Home with Copper Plus, paid yearly, for 2 years?",
@@ -383,7 +384,7 @@ function Answer({
             </div>
           )}
           <p className="text-sm whitespace-pre-wrap">
-            {reply}
+            <CitedText text={reply} />
             {working && (
               <span className="bg-primary ml-0.5 inline-block h-4 w-0.5 animate-pulse align-middle" />
             )}
@@ -603,6 +604,29 @@ function ToolOutput({ name, output }: { name: string; output: any }) {
           </div>
         ))}
       </div>
+    );
+  }
+  if (name === "search_docs" && output?.status) {
+    if (output.status === "unavailable")
+      return <p className="text-xs">{output.message}</p>;
+    return (
+      <ol className="space-y-2 text-xs">
+        {output.passages.map((p: any, i: number) => (
+          <li key={`${p.title}-${p.page}-${i}`}>
+            <a
+              href={p.url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary font-medium underline underline-offset-2"
+            >
+              {p.title}, p. {p.page}
+            </a>
+            <p className="text-muted-foreground mt-0.5 line-clamp-3">
+              {p.text}
+            </p>
+          </li>
+        ))}
+      </ol>
     );
   }
   // A tool without its own layout yet: show what came back as plain text.

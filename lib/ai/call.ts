@@ -1,7 +1,13 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { generateText, Output, streamText } from "ai";
+import { embedMany, generateText, Output, streamText } from "ai";
 import type { z } from "zod";
-import { defaultModel, MODELS, type ModelId } from "@/lib/ai/models";
+import {
+  defaultModel,
+  EMBEDDING_DIMENSIONS,
+  EMBEDDING_MODEL,
+  MODELS,
+  type ModelId,
+} from "@/lib/ai/models";
 import { costUsd } from "@/lib/ai/pricing";
 
 // Every model call in the app goes through this file, so each one is logged
@@ -36,7 +42,7 @@ type TextOptions = DistributiveOmit<
 export type AiCallRow = {
   module: number;
   feature: string;
-  model: ModelId;
+  model: ModelId | typeof EMBEDDING_MODEL.id;
   input_tokens: number | null;
   output_tokens: number | null;
   cost_usd: number | null;
@@ -145,6 +151,49 @@ export function callStream(info: CallInfo, options: StreamOptions) {
     onFinish: ({ totalUsage }) => logCall(row(true, totalUsage)),
     onError: () => logCall(row(false)),
   });
+}
+
+/**
+ * Turns texts into embeddings (lists of numbers that capture meaning), one per
+ * text, in the same order. Use "RETRIEVAL_DOCUMENT" for passages you are
+ * storing and "RETRIEVAL_QUERY" for the question you search with.
+ * Example: callEmbed({ module: 3, feature: "search-docs" }, [question], "RETRIEVAL_QUERY")
+ */
+export async function callEmbed(
+  info: Omit<CallInfo, "model">,
+  values: string[],
+  taskType: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY",
+): Promise<number[][]> {
+  const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
+  if (!googleKey) throw new AiNotConfiguredError();
+  const started = performance.now();
+  const row = (ok: boolean, tokens: number | null): AiCallRow => ({
+    module: info.module,
+    feature: info.feature,
+    model: EMBEDDING_MODEL.id,
+    input_tokens: tokens,
+    output_tokens: null,
+    cost_usd: null,
+    latency_ms: Math.round(performance.now() - started),
+    ok,
+    created_at: new Date().toISOString(),
+  });
+  try {
+    const result = await embedMany({
+      model: createGoogleGenerativeAI({ apiKey: googleKey }).embeddingModel(
+        EMBEDDING_MODEL.googleId,
+      ),
+      values,
+      providerOptions: {
+        google: { taskType, outputDimensionality: EMBEDDING_DIMENSIONS },
+      },
+    });
+    await logCall(row(true, result.usage.tokens ?? null));
+    return result.embeddings;
+  } catch (error) {
+    await logCall(row(false, null));
+    throw error;
+  }
 }
 
 // Asking for some thinking (rather than letting the model decide) is what
