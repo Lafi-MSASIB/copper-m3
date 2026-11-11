@@ -25,6 +25,19 @@ const MAX_STEPS = 5;
 
 const SORRY = "Sorry, something went wrong on my end. Please try again.";
 
+/**
+ * Google's free models sometimes turn a request away for a few seconds ("model
+ * overloaded", "too many requests"). The AI library already retries twice; a
+ * couple more tries means a busy moment doesn't reach the shopper as an error.
+ */
+const MAX_RETRIES = 4;
+
+/** The shopper only sees SORRY; this puts the real reason in the server log. */
+function logFailure(error: unknown) {
+  const reason = error instanceof Error ? error.message : String(error);
+  console.error(`[ask-copper] ${reason}`);
+}
+
 export async function askCopper({
   messages,
   useTools,
@@ -49,6 +62,7 @@ export async function askCopper({
     {
       messages,
       providerOptions: THOUGHT_SUMMARIES,
+      maxRetries: MAX_RETRIES,
       ...(useTools && {
         instructions: COPPER_INSTRUCTIONS,
         tools: copperTools,
@@ -116,7 +130,8 @@ export async function askCopper({
       }
       progress.status = "done";
       if (!progress.reply.trim()) progress.reply = SORRY;
-    } catch {
+    } catch (error) {
+      logFailure(error);
       progress.status = "error";
       if (!progress.reply.trim()) progress.reply = SORRY;
     }
